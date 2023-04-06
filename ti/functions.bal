@@ -473,15 +473,27 @@ public function tiFeeds() returns error? {
         string feedName = item[0].toString();
         string feedEndPoint = item[1].toString();
         string feedShouldFiltered = item[3].toString();
+        boolean isInvalidEndpoint = false;
 
         log:printInfo("---- " + feedName + " ----");
-       
+
         json getClientData = {};
         http:Client httpClient = check new (feedEndPoint.toString());
-        http:Response response = check httpClient->get("");
+        http:Response response;
+        do {
+            response = check httpClient->get("");
+        } on fail {
+            isInvalidEndpoint = true;
+        }
+
+        if isInvalidEndpoint == true {
+            log:printError(setAlertMessage(feedName + " :- invalid feed endpoint."));
+            currentRowNumber = currentRowNumber + 1;
+            continue;
+        }
 
         if response.statusCode != 200 {
-            log:printError(setAlertMessage(feedName + " :- Can not get the feed. Check the feed end point. StatusCode :- "
+            log:printError(setAlertMessage(feedName + " :- Can not get the feed. StatusCode :- "
                 + response.statusCode.toString()));
 
             currentRowNumber = currentRowNumber + 1;
@@ -500,13 +512,13 @@ public function tiFeeds() returns error? {
                     getClientData = check response.getJsonPayload();
                 } on fail {
                     log:printError(setAlertMessage(feedName + " :- Feed is not in XML or Json format"));
-                     currentRowNumber = currentRowNumber + 1;
+                    currentRowNumber = currentRowNumber + 1;
                     continue;
                 }
             }
 
         }
-         if getClientData == "".toJson() {
+        if getClientData == "".toJson() {
 
             log:printError(setAlertMessage(feedName + " :- Content is empty"));
             currentRowNumber = currentRowNumber + 1;
@@ -519,9 +531,9 @@ public function tiFeeds() returns error? {
         string dateTag = "";
         string descriptionTag = "";
         string urlTag = "";
-      
+
         xml? checkFormat = check xmldata:fromJson(getClientData);
-        
+
         if checkFormat.toString().includes("rss+xml") || checkFormat.toString().includes("<rss ") &&
         checkFormat.toString().includes("<channel>") && checkFormat.toString().includes("<item>") {
             fieldAccesTags = ["rss", "channel", "item", "EOL"];
@@ -548,8 +560,6 @@ public function tiFeeds() returns error? {
             currentRowNumber = currentRowNumber + 1;
             continue;
         }
-
-       
 
         json? AccessingFeild = {};
         json[] getItemDetails = [];
@@ -640,7 +650,7 @@ public function tiFeeds() returns error? {
             };
             feedItems.push(setItemDetails);
         }
-       
+
         if isErrorInFeildAccessing == true {
             log:printError(setAlertMessage(feedName + " :- mismatch with the feild accessing tags or content is empty"));
             currentRowNumber = currentRowNumber + 1;

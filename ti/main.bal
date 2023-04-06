@@ -77,7 +77,7 @@ public function main() returns error? {
     string statusCell = "B3";
     error? updateStatusCell = sheetsEp->setCell(spreadSheetId, sheetNameAlerts, statusCell, "Executed");
     if updateStatusCell is error {
-        log:printInfo(updateStatusCell.toString());
+        log:printError("Unable to update the status cell "+updateStatusCell.toString());
         return;
     }
 }
