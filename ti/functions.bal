@@ -20,9 +20,10 @@ import ballerina/lang.runtime;
 # + sheetsEp - sheet client endpoint. 
 # + feedShouldFiltered - feed should be filtered or not.
 # + return - 0 or 1.
-public function filteringFeeds(json feedDetails, sheets:Client sheetsEp, string feedShouldFiltered) returns int|error {
-    int filteringFlag = 0;
+public function filteringFeeds(json feedDetails, sheets:Client sheetsEp, string feedShouldFiltered, string mlFilteringMode)
+    returns int|error {
 
+    int filteringFlag = 0;
     string filteringString = ((check feedDetails.link).toString() + " " + (check feedDetails.title).toString()
         + " " + (check feedDetails.description).toString()).toLowerAscii();
     //filteringString includes feed link + title + description in lowercase.
@@ -149,7 +150,7 @@ public function filteringFeeds(json feedDetails, sheets:Client sheetsEp, string 
 # + feedShouldFiltered - feed should be filtered or not
 # + return - null or error.
 public function newFeedAddingProcess(string nameOfFeed, ItemDetails[] feedDetails, sheets:Client sheetsEp,
-        string feedLastUrlCell, string feedShouldFiltered) returns error? {
+        string feedLastUrlCell, string feedShouldFiltered, string mlFilteringMode) returns error? {
 
     //new feeds will be added to the records.
     string[][] records = [];
@@ -244,7 +245,7 @@ public function newFeedAddingProcess(string nameOfFeed, ItemDetails[] feedDetail
             //get the return value of filteringFeeds function by passing passData json variable.
             //(which includes i th index of feedDetail's data)
 
-            int isFiltered = check filteringFeeds(passData, sheetsEp, feedShouldFiltered);
+            int isFiltered = check filteringFeeds(passData, sheetsEp, feedShouldFiltered, mlFilteringMode);
 
             if isFiltered == 1 {
                 //if isFiltered == 1 ,which means feed(i th index of feedDetail's data) is filtered. 
@@ -599,65 +600,69 @@ public function tiFeeds() returns error? {
 
         //io:println(getItemDetails[0]);
         ItemDetails[] feedItems = [];
-
+        int numOfItems = 0;
         foreach json getItems in getItemDetails {
+            //get first 20 feed items
+            if numOfItems < 20 {
+                map<json> singleItem = <map<json>>getItems;
+                // setting up feed details
+                json setLink = singleItem[urlTag];
+                json setPubDate = singleItem[dateTag];
+                json setDiscription = singleItem[descriptionTag];
+                json setTitle = singleItem[titleTag];
+                if dateTag == "N/A" {
+                    string date = getDate(0);
+                    string time = getTime(0);
+                    setPubDate = date + " " + time;
+                }
+                //clean the feed details;
+                string|error cleanLink = clearText(setLink);
+                if cleanLink is error {
+                    setLink = "error in getting the link";
+                } else {
+                    setLink = cleanLink;
+                }
 
-            map<json> singleItem = <map<json>>getItems;
-            // setting up feed details
-            json setLink = singleItem[urlTag];
-            json setPubDate = singleItem[dateTag];
-            json setDiscription = singleItem[descriptionTag];
-            json setTitle = singleItem[titleTag];
-            if dateTag == "N/A" {
-                string date = getDate(0);
-                string time = getTime(0);
-                setPubDate = date + " " + time;
-            }
-            //clean the feed details;
-            string|error cleanLink = clearText(setLink);
-            if cleanLink is error {
-                setLink = "error in getting the link";
-            } else {
-                setLink = cleanLink;
+                string|error cleanPubDate = clearText(setPubDate);
+                if cleanPubDate is error {
+                    setPubDate = "error in getting the Published Date";
+                } else {
+                    setPubDate = cleanPubDate;
+                }
+
+                string|error cleanDiscription = clearText(setDiscription);
+                if cleanDiscription is error {
+                    setDiscription = "error in getting the description";
+                } else {
+                    setDiscription = cleanDiscription;
+                }
+
+                string|error cleanTitle = clearText(setTitle);
+                if cleanTitle is error {
+                    setTitle = "error in getting the link";
+                } else {
+                    setTitle = cleanTitle;
+                }
+
+                ItemDetails setItemDetails = {
+                    link: setLink,
+                    pubDate: setPubDate,
+                    description: setDiscription,
+                    title: setTitle
+                };
+                feedItems.push(setItemDetails);
             }
 
-            string|error cleanPubDate = clearText(setPubDate);
-            if cleanPubDate is error {
-                setPubDate = "error in getting the Published Date";
-            } else {
-                setPubDate = cleanPubDate;
-            }
-
-            string|error cleanDiscription = clearText(setDiscription);
-            if cleanDiscription is error {
-                setDiscription = "error in getting the description";
-            } else {
-                setDiscription = cleanDiscription;
-            }
-
-            string|error cleanTitle = clearText(setTitle);
-            if cleanTitle is error {
-                setTitle = "error in getting the link";
-            } else {
-                setTitle = cleanTitle;
-            }
-
-            ItemDetails setItemDetails = {
-                link: setLink,
-                pubDate: setPubDate,
-                description: setDiscription,
-                title: setTitle
-            };
-            feedItems.push(setItemDetails);
+            numOfItems = numOfItems + 1;
         }
-
+        
         if isErrorInFeildAccessing == true {
             log:printError(setAlertMessage(feedName + " :- mismatch with the feild accessing tags or content is empty"));
             currentRowNumber = currentRowNumber + 1;
             continue;
         } else {
             string feedLastUrlCell = "C" + currentRowNumber.toString();
-            error? addFeed = newFeedAddingProcess(feedName, feedItems, sheetsEp, feedLastUrlCell, feedShouldFiltered);
+            error? addFeed = newFeedAddingProcess(feedName, feedItems, sheetsEp, feedLastUrlCell, feedShouldFiltered, mlFilteringMode);
             if addFeed is error {
                 log:printError(setAlertMessage(feedName + " :- error in adding feeds process"));
                 currentRowNumber = currentRowNumber + 1;
