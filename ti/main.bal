@@ -18,6 +18,12 @@ configurable string sheetNameMetaData = ?;
 configurable string sheetNameCveIds = ?;
 configurable string sheetNameAlerts = ?;
 configurable string[] keyWordsLowerCase = ?;
+configurable string mlModelBaseUrl = ?;
+configurable string mlModelTokenUrl = ?;
+configurable string mlModelClientId = ?;
+configurable string mlModelClientSecret = ?;
+configurable string mlModelApiKey = ?;
+
 
 sheets:ConnectionConfig spreadSheetConfig = {
     auth: {

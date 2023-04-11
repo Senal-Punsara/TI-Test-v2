@@ -1,0 +1,30 @@
+{
+    "definitions": {},
+    "info": {
+        "description": "powered by Flasgger",
+        "termsOfService": "/tos",
+        "title": "A swagger API",
+        "version": "0.0.1"
+    },
+    "paths": {
+        "/predict": {
+            "post": {
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "text",
+                        "required": true,
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "The output values"
+                    }
+                },
+                "summary": "Let's predict the feed is relevent or not"
+            }
+        }
+    },
+    "swagger": "2.0"
+}
