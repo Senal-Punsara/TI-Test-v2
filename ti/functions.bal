@@ -14,54 +14,55 @@ import ballerina/xmldata;
 import ballerina/io;
 import ballerina/lang.runtime;
 
-# function which filtering feeds using machine learing model
+# calling machine learing model api for filtering 
 #
 # + text - string which need to be filtered.
-# + return - Return Value Description
+# + return - a string  ('relevent' or 'not_relevent')
 public function mlFilteringModel(string text) returns int|error {
 
-    string[] textSplit = regex:split(text, " ");
-    int countWords = 0;
-    string reduceContent = "";
-    foreach string word in textSplit {
-        if countWords <= 500 {
-            reduceContent = reduceContent + " " + word;
-        }
-        countWords = countWords + 1;
-    }
     string[] replaceChar = ["\\n", "[^a-zA-Z0-9\\s]"];
-    string cleanText = reduceContent;
+    string cleanText = text;
     foreach string item in replaceChar {
         cleanText = regex:replaceAll(cleanText, item, "");
     }
-    //io:println(cleanText);
-    //string endpoint = "/predict?text="+para;
-    http:Client httpClient = check new (mlModelBaseUrl,
-        auth = {
-            tokenUrl: mlModelTokenUrl,
-            clientId: mlModelClientId,
-            clientSecret: mlModelClientSecret,
-            scopes: [],
-            clientConfig: {}
-        }
-        );
+      
+    http:Client httpClientML = check new (mlModelBaseUrl);
 
-    http:Request req = new;
-    req.setHeader("API-KEY", mlModelApiKey);
+    http:Request reqML = new ();
+    //payload(the input) should be in this format
+    json payload = {
+                "Inputs": {
+                    "input1": [
+                    {
+                        "Category": "not_relevent",
+                        "Text": cleanText
+                    }
+                    ]
+                },
+                "GlobalParameters": {}
+                };
+    reqML.setJsonPayload(payload);
+    reqML.addHeader("Authorization", "Bearer "+mlModelBearerToken);
+    reqML.addHeader("Content-Type","application/json");
 
-    http:Response response = check httpClient->/predict.post(message = (req), params = {"text": cleanText});
+    http:Response response = check httpClientML->post(path = "", message = (reqML));
     if (response.statusCode != 200) {
         log:printError("ML Api error. Status code:- " + response.statusCode.toString());
         return -1;
     } else {
-        if response.getTextPayload() == "relevent" {
+        json getResponse =check response.getJsonPayload();
+       
+        json getResult = check getResponse.Results;
+        json[] WebServiceOutput0 = check getResult.WebServiceOutput0.ensureType();
+        json temp = WebServiceOutput0[0];
+        map<json>label = <map<json>>temp;
+        json getLabel = label["Scored Labels"];
+        if getLabel == "relevent" {
             return 1;
         } else {
             return 0;
         }
-
     }
-
 }
 
 # function which filtering feeds according to keywords,using machine learning model and CVE numbers.
@@ -174,6 +175,7 @@ public function filteringFeeds(json feedDetails, sheets:Client sheetsEp, string 
                     error? appendCveNumbers = sheetsEp->appendRowToSheet(spreadSheetId, sheetNameCveIds, temp);
                     runtime:sleep(0.75);
                     if appendCveNumbers is error {
+                        log:printError("error occurs when sending cve numbers to the spread shaeet.");
                         return -1;
 
                     }
@@ -182,6 +184,7 @@ public function filteringFeeds(json feedDetails, sheets:Client sheetsEp, string 
 
         }
         else {
+            log:printError("error occurs when getting cve numbers from the spread shaeet.");
             return -1;
         }
 
@@ -285,7 +288,7 @@ public function newFeedAddingProcess(string nameOfFeed, ItemDetails[] feedDetail
                     log:printInfo(records.length().toString() + " records are send to the google sheet (1st)");
 
                 } else {
-                    log:printError(setAlertMessage(nameOfFeed + " :- error occurs when receiving or sending cve numbers to the spread shaeet. "));
+                    log:printError(setAlertMessage(nameOfFeed + " :- Error in the filtering process. Please check choreo logs for further information."));
 
                 }
 
@@ -387,8 +390,8 @@ public function newFeedAddingProcess(string nameOfFeed, ItemDetails[] feedDetail
 
 # returns the current date which is customized.
 #
-# + seconds - time ajustment 
-# + return - current date `mm/dd/yyyy` as a string
+# + seconds - time ajustment.
+# + return - current date `mm/dd/yyyy` as a string.
 public function getDate(decimal seconds) returns string {
     //19800 sec = 05 hours 30 mins
     time:Utc utc = time:utcAddSeconds(time:utcNow(), 19800 + seconds);
@@ -450,7 +453,12 @@ public function getTime(decimal seconds) returns string {
 # + return - Return the content which is cleaned.
 public function clearText(json text) returns string|error {
     string theText = "";
-    string[][] replaceChar = [["\\[", ""], ["\\]", ""], ["\",\"", ""], ["\"", ""], ["&lt;", "<"], ["&gt;", ">"], ["<.*?>", ""], ["&amp;", "&"], ["#38;", ""], ["nbsp;", "'"], ["&.*?;", ""], ["\\n", ""]];
+    string[][] replaceChar = [
+        ["\\[", ""],["\\]", ""],["\",\"", ""],
+        ["\"", ""],["&lt;", "<"],["&gt;", ">"],
+        ["<.*?>", ""],["&amp;", "&"],["#38;", ""],
+        ["nbsp;", "'"],["&.*?;", ""]
+    ];
     if text.toString().includes("\"#content\"") {
 
         json getContent = (<map<json>>text).get("#content");
@@ -509,11 +517,12 @@ public function tiFeeds() returns error? {
     string sheetEditingMode = "";
     string mlFilteringMode = "";
 
-    //get the sheet's meta deta. Sheet name :- 'RSS_feeds_meta_data'
+    //get the sheet's meta data. Sheet name :- 'Ti_feeds_metaData'.
+    //meta data :- startingRowNum, lastColumn, sheetEditingMode, mlFilteringMode. 
     sheets:Range|error getRecordsRange = sheetsEp->getRange(spreadSheetId, sheetNameMetaData, "B1:B4");
     runtime:sleep(0.75);
     if getRecordsRange is error {
-        log:printInfo(setAlertMessage("Cannot get sheet meta data." + getRecordsRange.toString()));
+        log:printInfo(setAlertMessage("Cannot get sheet's meta data." + getRecordsRange.toString()));
         return;
     } else {
         (int|string|decimal)[][] getVals = getRecordsRange.values;
@@ -539,7 +548,9 @@ public function tiFeeds() returns error? {
     } else {
         rssFeedsInfo = getRecords.values;
     }
+
     currentRowNumber = check int:fromString(startingRowNum.toString());
+    string[] checkDuplicatesEndpoints = [];
     foreach (int|string|decimal)[] item in rssFeedsInfo {
 
         //checking the End Of Sheet(EOS)
@@ -555,23 +566,38 @@ public function tiFeeds() returns error? {
 
         log:printInfo("---- " + feedName + " ----");
 
+        //check feed endpoint is already using or not.
+        if checkDuplicatesEndpoints.length() == 0 {
+            checkDuplicatesEndpoints.push(feedEndPoint);
+        } else {
+            if checkDuplicatesEndpoints.indexOf(feedEndPoint) is int {
+                log:printError(setAlertMessage(feedName + " :- feed endpoint is already using."));
+                currentRowNumber = currentRowNumber + 1;
+                continue;
+            } else {
+                checkDuplicatesEndpoints.push(feedEndPoint);
+            }
+        }
+
         json getClientData = {};
-        http:Client httpClient = check new (feedEndPoint.toString());
+        io:println(feedEndPoint.toString());
+        http:Client httpClient; 
         http:Response response;
         do {
+            httpClient = check new (feedEndPoint.toString());
             response = check httpClient->get("");
         } on fail {
             isInvalidEndpoint = true;
         }
 
         if isInvalidEndpoint == true {
-            log:printError(setAlertMessage(feedName + " :- invalid feed endpoint."));
+            log:printError(setAlertMessage(feedName + " :- Invalid url. Please check the entered url in the spread sheet."));
             currentRowNumber = currentRowNumber + 1;
             continue;
         }
 
         if response.statusCode != 200 {
-            log:printError(setAlertMessage(feedName + " :- Can not get the feed. StatusCode :- "
+            log:printError(setAlertMessage(feedName + " :- Error occurs when fetching the details from the endpoint. StatusCode :- "
                 + response.statusCode.toString()));
 
             currentRowNumber = currentRowNumber + 1;
@@ -673,8 +699,6 @@ public function tiFeeds() returns error? {
             isErrorInFeildAccessing = true;
         }
 
-
-
         if isErrorInFeildAccessing == true {
             log:printError(setAlertMessage(feedName + " :- mismatch with the feild accessing tags or content is empty"));
             currentRowNumber = currentRowNumber + 1;
@@ -718,7 +742,17 @@ public function tiFeeds() returns error? {
                         log:printError("error in getting the description");
 
                     } else {
-                        setDiscription = cleanDiscription;
+                        //reduce the content to first 500 words.
+                        string[] splitDes = regex:split(cleanDiscription, " ");
+                        int countWords = 0;
+                        string reduceContentOfDes = "";
+                        foreach string word in splitDes {
+                            if countWords <= 500 {
+                                reduceContentOfDes = reduceContentOfDes + " " + word;
+                            }
+                            countWords = countWords + 1;
+                        }
+                        setDiscription = reduceContentOfDes;
                     }
 
                     string|error cleanTitle = clearText(setTitle);
@@ -728,13 +762,13 @@ public function tiFeeds() returns error? {
                         setTitle = cleanTitle;
                     }
 
-                    ItemDetails setItemDetails = {
+                    ItemDetails setFeedItemDetails = {
                         link: setLink,
                         pubDate: setPubDate,
                         description: setDiscription,
                         title: setTitle
                     };
-                    feedItems.push(setItemDetails);
+                    feedItems.push(setFeedItemDetails);
                 }
 
                 numOfItems = numOfItems + 1;

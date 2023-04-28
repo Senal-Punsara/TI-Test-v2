@@ -19,10 +19,7 @@ configurable string sheetNameCveIds = ?;
 configurable string sheetNameAlerts = ?;
 configurable string[] keyWordsLowerCase = ?;
 configurable string mlModelBaseUrl = ?;
-configurable string mlModelTokenUrl = ?;
-configurable string mlModelClientId = ?;
-configurable string mlModelClientSecret = ?;
-configurable string mlModelApiKey = ?;
+configurable string mlModelBearerToken = ?;
 
 
 sheets:ConnectionConfig spreadSheetConfig = {
@@ -36,11 +33,11 @@ sheets:ConnectionConfig spreadSheetConfig = {
 sheets:Client sheetsEp = check new (spreadSheetConfig);
 
 public function main() returns error? {
-    string statusCellRange = "A3:B3";
-    sheets:Range|error getStatusRange = sheetsEp->getRange(spreadSheetId, sheetNameAlerts, statusCellRange);
+    string LastExecuTimeAndStatusCells = "A3:B3";
+    sheets:Range|error getLastExecuTimeAndStatus = sheetsEp->getRange(spreadSheetId, sheetNameAlerts, LastExecuTimeAndStatusCells);
     runtime:sleep(1);
-    if getStatusRange is sheets:Range {
-         (int|string|decimal)[][] getVals = getStatusRange.values;
+    if getLastExecuTimeAndStatus is sheets:Range {
+         (int|string|decimal)[][] getVals = getLastExecuTimeAndStatus.values;
          string getLastExecuteTime = getVals[0][0].toString();
           string getStatus = getVals[0][1].toString();
         if getStatus == "Running" {
@@ -57,22 +54,21 @@ public function main() returns error? {
             return;
         }
     } else {
-        log:printError("Cannot get the getStatusRange. " + getStatusRange.toString());
-
+        log:printError("Cannot get the Cell details. " + getLastExecuTimeAndStatus.toString());
         return;
     }
 
-    string updateStatusRange = "A3:C3";
+    string statusRange = "A3:C3";
     string startedDate = getDate(0);
     string startedTime = getTime(0);
     string nextDate = getDate(900);
     string nextTime = getTime(900);
     string status = "Running";
     string[][] entries = [[startedDate + " at " + startedTime, status, nextDate + " at " + nextTime]];
-    sheets:Range range = {a1Notation: updateStatusRange, values: entries};
-    error? setupdateStatusRange = sheetsEp->setRange(spreadSheetId, sheetNameAlerts, range);
-    if setupdateStatusRange is error {
-        log:printInfo(setupdateStatusRange.toString());
+    sheets:Range range = {a1Notation: statusRange, values: entries};
+    error? setStatusRange = sheetsEp->setRange(spreadSheetId, sheetNameAlerts, range);
+    if setStatusRange is error {
+        log:printInfo(setStatusRange.toString());
         return;
     }
     runtime:sleep(1);
