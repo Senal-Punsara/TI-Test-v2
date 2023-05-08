@@ -13,6 +13,7 @@ import ballerina/http;
 import ballerina/xmldata;
 import ballerina/io;
 import ballerina/lang.runtime;
+import ballerina/lang.'int;
 
 # calling machine learing model api for filtering 
 #
@@ -65,6 +66,44 @@ public function mlFilteringModel(string text) returns int|error {
     }
 }
 
+public function similarity(string s1, string s2) returns float {
+    int len1 = s1.length();
+    int len2 = s2.length();
+
+    // Initialize a 2D array with dimensions (len1+1) x (len2+1)
+    int[][] matrix = [];
+   
+    // Fill in the first row and column of the matrix
+    foreach int i in 0...len1 {
+        matrix[i][0] = i;
+    }
+    foreach int j in 0...len2 {
+        matrix[0][j] = j;
+    }
+   io:println(matrix);
+    // Fill in the rest of the matrix
+    foreach int i in 1...len1 {
+        foreach int j in 1...len2 {
+            if (s1[i - 1] == s2[j - 1]) {
+                matrix[i][j] = matrix[i - 1][j - 1];
+            } else {
+                matrix[i][j] = 1 + int:min(matrix[i - 1][j], matrix[i][j - 1], matrix[i - 1][j - 1]);
+            }
+        }
+    }
+foreach int i in 0...len1{
+    io:println(matrix[i]);
+}
+
+    // The Levenshtein Distance is the value in the bottom-right cell of the matrix
+    // The similarity score is the inverse of the Levenshtein Distance, normalized by the length of the longer string
+    io:println(matrix[len1][len2]);
+     io:println(int:max(len1, len2));
+    float similarityScore = <float>(1-<float>(matrix[len1][len2]) /<float>(int:max(len1,len2)));
+
+    return similarityScore;
+}
+
 # function which filtering feeds according to keywords,using machine learning model and CVE numbers.
 #
 # + feedDetails - a record which includes all feed details of a specific threat intel.  
@@ -102,7 +141,7 @@ public function filteringFeeds(json feedDetails, sheets:Client sheetsEp, string 
                 } else if mlFilteringMode == "off" {
                     mainFiltering = true;
                 } else {
-                    log:printError("ML Filtering mode value is not either 'on' or 'off'");
+                    log:printError("ML Filtering mode value is not either 'on' or 'off'. Check the Spread Sheet.");
                     return -1;
                 }
                 break;
@@ -248,8 +287,8 @@ public function newFeedAddingProcess(string nameOfFeed, ItemDetails[] feedDetail
             return;
         }
 
-        //checking latest feed url in feedDetails is equal with LastRecFeedUrl
-        if feedDetails[i].link.toString() == lastRecFeedUrl {
+        //checking latest feed url in feedDetails is equal with lastRecFeedUrl
+        if feedDetails[i].link.toString() == lastRecFeedUrl || similarity(feedDetails[i].link.toString(),lastRecFeedUrl.toString())>0.85 {
 
             if i == 0 {
                 //this means Last record  of relevant feed is still the latest feed.
