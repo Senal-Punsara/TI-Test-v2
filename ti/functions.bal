@@ -80,7 +80,7 @@ public function similarity(string s1, string s2) returns float {
     foreach int j in 0...len2 {
         matrix[0][j] = j;
     }
-   io:println(matrix);
+  
     // Fill in the rest of the matrix
     foreach int i in 1...len1 {
         foreach int j in 1...len2 {
@@ -91,14 +91,10 @@ public function similarity(string s1, string s2) returns float {
             }
         }
     }
-foreach int i in 0...len1{
-    io:println(matrix[i]);
-}
 
     // The Levenshtein Distance is the value in the bottom-right cell of the matrix
     // The similarity score is the inverse of the Levenshtein Distance, normalized by the length of the longer string
-    io:println(matrix[len1][len2]);
-     io:println(int:max(len1, len2));
+    
     float similarityScore = <float>(1-<float>(matrix[len1][len2]) /<float>(int:max(len1,len2)));
 
     return similarityScore;
