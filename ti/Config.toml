@@ -7,6 +7,11 @@
  keyWordsLowerCase = ["google", "microsoft", "apple", " aws ", "amazon", "kubernetes", "macos", "jsonwebtoken"," jwt ", "oauth",
              "azure","cisco","openssl","openssh","ubuntu"]
 
-
+refreshToken = ""
+clientId = ""
+clientSecret = ""
+spreadSheetId = ""
+mlModelBaseUrl = "http://20.94.36.14:80/api/v1/service/mlfiltering/score"
+mlModelBearerToken = ""
 
 
