@@ -11,13 +11,12 @@ import ballerina/time;
 import ballerina/log;
 import ballerina/http;
 import ballerina/xmldata;
-import ballerina/io;
 import ballerina/lang.runtime;
 import ballerina/lang.'int;
 
-# calling machine learing model api for filtering 
+# Calling the machine learing model endpoint for filtering the threat intel feeds.
 #
-# + text - string which need to be filtered.
+# + text - feed which need to be filtered.
 # + return - a string  ('relevent' or 'not_relevent')
 public function mlFilteringModel(string text) returns int|error {
 
@@ -28,7 +27,6 @@ public function mlFilteringModel(string text) returns int|error {
     }
       
     http:Client httpClientML = check new (mlModelBaseUrl);
-
     http:Request reqML = new ();
     //payload(the input) should be in this format
     json payload = {
@@ -48,17 +46,16 @@ public function mlFilteringModel(string text) returns int|error {
 
     http:Response response = check httpClientML->post(path = "", message = (reqML));
     if (response.statusCode != 200) {
-        log:printError("ML Api error. Status code:- " + response.statusCode.toString());
+        log:printError("ML endpoint error. Status code:- " + response.statusCode.toString());
         return -1;
     } else {
         json getResponse =check response.getJsonPayload();
-       
         json getResult = check getResponse.Results;
         json[] WebServiceOutput0 = check getResult.WebServiceOutput0.ensureType();
         json temp = WebServiceOutput0[0];
         map<json>label = <map<json>>temp;
         json getLabel = label["Scored Labels"];
-        if getLabel == "relevent" {
+        if getLabel == "relevant" {
             return 1;
         } else {
             return 0;
@@ -66,6 +63,11 @@ public function mlFilteringModel(string text) returns int|error {
     }
 }
 
+# Check the similarity of two strings
+#
+# + s1 - First string  
+# + s2 - Second string
+# + return - similarityScore (float value)
 public function similarity(string s1, string s2) returns float {
     int len1 = s1.length();
     int len2 = s2.length();
@@ -73,7 +75,7 @@ public function similarity(string s1, string s2) returns float {
     // Initialize a 2D array with dimensions (len1+1) x (len2+1)
     int[][] matrix = [];
    
-    // Fill in the first row and column of the matrix
+    // fill in the first row and column of the matrix
     foreach int i in 0...len1 {
         matrix[i][0] = i;
     }
@@ -81,7 +83,7 @@ public function similarity(string s1, string s2) returns float {
         matrix[0][j] = j;
     }
   
-    // Fill in the rest of the matrix
+    // fill in the rest of the matrix
     foreach int i in 1...len1 {
         foreach int j in 1...len2 {
             if (s1[i - 1] == s2[j - 1]) {
@@ -93,51 +95,53 @@ public function similarity(string s1, string s2) returns float {
     }
 
     // The Levenshtein Distance is the value in the bottom-right cell of the matrix
-    // The similarity score is the inverse of the Levenshtein Distance, normalized by the length of the longer string
+    // The similarity score is the inverse of the Levenshtein Distance, normalized by the length of the longer 
+    // string
     
     float similarityScore = <float>(1-<float>(matrix[len1][len2]) /<float>(int:max(len1,len2)));
 
     return similarityScore;
 }
 
-# function which filtering feeds according to keywords,using machine learning model and CVE numbers.
+# Function which filtering feeds according to keywords, machine learning model and CVE numbers.
 #
 # + feedDetails - a record which includes all feed details of a specific threat intel.  
 # + sheetsEp - sheet client endpoint. 
 # + feedShouldFiltered - feed should be filtered or not.
 # + mlFilteringMode - feed should be filtered using mlModel or not.
 # + return - 0 , 1, -1.
-public function filteringFeeds(json feedDetails, sheets:Client sheetsEp, string feedShouldFiltered, string mlFilteringMode)
-    returns int|error {
+public function filteringFeeds(json feedDetails, sheets:Client sheetsEp, string feedShouldFiltered, 
+    string mlFilteringMode) returns int|error {
     int filteringFlag = 0;
     string filteringString = ((check feedDetails.link).toString() + " " + (check feedDetails.title).toString()
         + " " + (check feedDetails.description).toString()).toLowerAscii();
-    //filteringString includes feed link + title + description in lowercase.
+    //filteringString includes feed's title + description in lowercase.
 
     boolean mainFiltering = false;
     int|error mlFiltered = 0;
     boolean cveFiltered = false;
     int noKeyWord = 0;
+
+    //filtering the feed according to keywords. if filteringString includes
+    //one of the key words in keyWords array then mainFiltering become true. 
     if feedShouldFiltered == "yes" {
-        //filtering the feed according to keywords. if filteringString includes
-        //one of key words in keyWords array then mainFiltering become true. 
+        
         foreach string word in keyWordsLowerCase {
             if filteringString.includes(word) {
                 if mlFilteringMode == "on" {
                     string text = ((check feedDetails.title).toString() + " " + (check feedDetails.description).toString());
                     mlFiltered = mlFilteringModel(text);
-                    runtime:sleep(0.75);
+                    runtime:sleep(0.50);
                     if mlFiltered is error || mlFiltered == -1 {
-                        log:printError("error in ml filtering ");
+                        log:printError("An error occures in the machine learning filtering");
                         return -1;
                     } else if mlFiltered == 1 {
                         mainFiltering = true;
-                    }
-
+                    } 
                 } else if mlFilteringMode == "off" {
                     mainFiltering = true;
                 } else {
-                    log:printError("ML Filtering mode value is not either 'on' or 'off'. Check the Spread Sheet.");
+                    log:printError("ML Filtering mode value is not either 'on' or 'off'. Check out the Spread Sheet.");
                     return -1;
                 }
                 break;
@@ -145,23 +149,19 @@ public function filteringFeeds(json feedDetails, sheets:Client sheetsEp, string 
                 noKeyWord = noKeyWord + 1;
             }
         }
-        if noKeyWord == keyWordsLowerCase.length() {
-
-        }
+       
     } else if feedShouldFiltered == "no" {
         mainFiltering = true;
     }
 
-    //filtering the feed according to  cve numbers. if filteringString 
-    //includes new cve numbers cveFiltered become true. 
+    //filtering the feed according to  CVE numbers. if filteringString includes new CVE numbers cveFiltered becomes true. 
     if filteringString.includes("cve-") {
 
         string[] cveNumArray = [];
-        // the array which will  include all the cve numbers which are included in the relevant feed.
-
+        //the array which will  include all the CVE numbers which are included in the relevant feed.
         regex:Match[] cveNumbers = regex:searchAll(filteringString, "cve-[0-9]{4}-[0-9]+");
-        //extracting all cve numbers in the filteringString into cveNumbers array.
 
+        //extracting all CVE numbers in the filteringString into cveNumbers array.
         foreach int x in 0 ... cveNumbers.length() - 1 {
             if cveNumArray.indexOf(cveNumbers[x]["matched"]) !is int {
                 cveNumArray.push(cveNumbers[x]["matched"]);
@@ -169,37 +169,30 @@ public function filteringFeeds(json feedDetails, sheets:Client sheetsEp, string 
         }
 
         (string|int|decimal)[] cveNums = [];
-        //this is the variable which will be assigned the all cve numbers which are in the spreadsheet.
+        //the variable which will be assigned the all CVE numbers which are in the spreadsheet.
 
         string[] addCevNumbers = [];
-        //will add cve numbers from cveNumArray to addCevNumbers array if those will not include in cveNums;
+        //will add CVE numbers from cveNumArray to addCevNumbers array if those will not include in cveNums;
 
-        int countMatchedCve = 0;
-        //this is the variable which will count how many 
-
-        //getting colunm A values from the spreadsheet. 
-        //name of the spreadsheet 'TI_Solution'. name of the subsheet 'CVE_ids' 
+        //getting column A values from the spreadsheet. 
+        //name of the spreadsheet 'TI_Solution-V2'. name of the subsheet 'CVE_ids' 
         sheets:Column|error column = sheetsEp->getColumn(spreadSheetId, sheetNameCveIds, "A");
         runtime:sleep(1);
         if column is sheets:Column {
             //assigning column A values in the spreadsheet to cveNums.
-            //name of the spreadsheet 'TI_Solution'. name of the subsheet 'CVE_ids' 
+            //name of the spreadsheet 'TI_Solution-V2'. name of the subsheet 'CVE_ids' 
             cveNums = column.values;
 
-            //checking that there are any cve numbers in cveNumArray which already contains in cveNums.
+            //checking if there are any CVE numbers in cveNumArray which already contains in cveNums.
             foreach string item in cveNumArray {
                 if cveNums.indexOf(item) !is int {
-                    //if the current item (cve number) is not in the cveNums push it to addCevNumbers.
+                    //if the current item (CVE number) is not in the cveNums, push it to addCevNumbers.
                     addCevNumbers.push(item);
-
-                } else {
-                    //if the current item (cve number) is  in the increase the value of countMatchedCve by 1 .
-                    countMatchedCve = countMatchedCve + 1;
-                }
+                } 
             }
 
             if addCevNumbers.length() != 0 {
-                //new cve numbers are found.
+                //new CVE numbers are found.
                 cveFiltered = true;
 
                 foreach string item in addCevNumbers {
@@ -210,27 +203,25 @@ public function filteringFeeds(json feedDetails, sheets:Client sheetsEp, string 
                     error? appendCveNumbers = sheetsEp->appendRowToSheet(spreadSheetId, sheetNameCveIds, temp);
                     runtime:sleep(0.75);
                     if appendCveNumbers is error {
-                        log:printError("error occurs when sending cve numbers to the spread shaeet.");
+                        log:printError("An error occurs when sending CVE numbers to the Spreadshaeet.");
                         return -1;
-
                     }
                 }
             }
 
         }
         else {
-            log:printError("error occurs when getting cve numbers from the spread shaeet.");
+            log:printError("An error occurs when getting CVE numbers from the Spreadshaeet.");
             return -1;
         }
-
     }
 
     if mainFiltering == true && filteringString.includes("cve-") == false {
-        //if feed has a key word which in keyWords array and not includes 'cve-' then filteringFlag = 1;
+        //if feed has a key word which in keyWords array and not includes any CVE number then filteringFlag = 1;
         filteringFlag = 1;
     } else if mainFiltering == true && filteringString.includes("cve-") == true {
         if cveFiltered == true {
-            //if feed has a key word which in keyWords array and feed has new cve numbers then filteringFlag = 1;
+            //if feed has a key word which in keyWords array and feed has new CVE numbers then filteringFlag = 1;
             filteringFlag = 1;
         }
     }
@@ -238,12 +229,12 @@ public function filteringFeeds(json feedDetails, sheets:Client sheetsEp, string 
     return filteringFlag;
 }
 
-# process of adding new feeds. created this function to improve the code readability.
+# Process of adding new feeds. Created this function to improve the code readability.
 #
 # + nameOfFeed - name of the feed. eg:- hackernews, bleeping computer.   
 # + feedDetails - a record which includes all feed details of a specific threat intel.   
 # + sheetsEp - sheet client endpoint.   
-# + feedLastUrlCell - cell of the url which is recorded as the latest url of a feed in the spread sheet.  
+# + feedLastUrlCell - cell of the url which is recorded as the latest url of a feed in the Spreadsheet.  
 # + feedShouldFiltered - feed should be filtered or not
 # + mlFilteringMode - feed should be filtered using mlModel or not.
 # + return - null or error.
@@ -260,7 +251,6 @@ public function newFeedAddingProcess(string nameOfFeed, ItemDetails[] feedDetail
     runtime:sleep(0.75);
     if getLastRecFeedUrl is sheets:Cell {
         lastRecFeedUrl = getLastRecFeedUrl.value;
-
     } else {
         log:printError(setAlertMessage(nameOfFeed + " :- Cannot get the last record's url. " + getLastRecFeedUrl.toString()));
         return;
@@ -269,11 +259,11 @@ public function newFeedAddingProcess(string nameOfFeed, ItemDetails[] feedDetail
     boolean isErrorInFiltering = false;
 
     foreach int i in 0 ..< feedDetails.length() {
-
         //if a threat intel is new to the system 
         if lastRecFeedUrl == "new_feed" {
 
-            error? setLastRecord = sheetsEp->setCell(spreadSheetId, sheetNameMetaData, feedLastUrlCell, feedDetails[0].link.toString());
+            error? setLastRecord = sheetsEp->setCell(spreadSheetId, sheetNameMetaData, feedLastUrlCell, 
+                feedDetails[0].link.toString());
             runtime:sleep(0.75);
             if setLastRecord is error {
                 log:printError(setAlertMessage(nameOfFeed + " :- Cannot add the TI feed. " + setLastRecord.toString()));
@@ -284,11 +274,12 @@ public function newFeedAddingProcess(string nameOfFeed, ItemDetails[] feedDetail
         }
 
         //checking latest feed url in feedDetails is equal with lastRecFeedUrl
-        if feedDetails[i].link.toString() == lastRecFeedUrl || similarity(feedDetails[i].link.toString(),lastRecFeedUrl.toString())>0.85 {
-
+        if feedDetails[i].link.toString() == lastRecFeedUrl || similarity(feedDetails[i].link.toString(),
+            lastRecFeedUrl.toString()) > 0.98 {
+              
             if i == 0 {
                 //this means Last record  of relevant feed is still the latest feed.
-                log:printInfo("up to date");
+                log:printInfo("Up to date");
                 return;
             } else {
 
@@ -306,12 +297,14 @@ public function newFeedAddingProcess(string nameOfFeed, ItemDetails[] feedDetail
                         error? appendRow = sheetsEp->appendRowToSheet(spreadSheetId, sheetName, vals);
                         runtime:sleep(0.75);
                         if appendRow is error {
-                            log:printError(setAlertMessage(nameOfFeed + " :- error occurs when sending data to the spread sheet. "));
+                            log:printError(setAlertMessage(nameOfFeed + " :- An error occurs when sending data to the spread sheet."));
                             //updating the latest record as the last record. index 0 includes the newest record!
-                            error? setLastRecord = sheetsEp->setCell(spreadSheetId, sheetNameMetaData, feedLastUrlCell, feedDetails[0].link.toString());
+                            error? setLastRecord = sheetsEp->setCell(spreadSheetId, sheetNameMetaData, feedLastUrlCell, 
+                                feedDetails[0].link.toString());
                             runtime:sleep(0.75);
                             if setLastRecord is error {
-                                log:printError(setAlertMessage(nameOfFeed + ":- Cannot update the lastest record. " + setLastRecord.toString()));
+                                log:printError(setAlertMessage(nameOfFeed + ":- Cannot update the latest record. " 
+                                + setLastRecord.toString()));
                                 return;
                             }
                             log:printInfo("Last record is updated.");
@@ -320,18 +313,20 @@ public function newFeedAddingProcess(string nameOfFeed, ItemDetails[] feedDetail
                         }
                     }
 
-                    log:printInfo(records.length().toString() + " records are send to the google sheet (1st)");
+                    log:printInfo(records.length().toString() + " records are send to the Spreadsheet (1st)");
 
                 } else {
-                    log:printError(setAlertMessage(nameOfFeed + " :- Error in the filtering process. Please check choreo logs for further information."));
+                    log:printError(setAlertMessage(nameOfFeed + 
+                    " :- An error occurs in the filtering process. Please check Choreo logs for further information."));
 
                 }
 
                 //updating the latest record as the last record. index 0 includes the newest record!
-                error? setLastRecord = sheetsEp->setCell(spreadSheetId, sheetNameMetaData, feedLastUrlCell, feedDetails[0].link.toString());
+                error? setLastRecord = sheetsEp->setCell(spreadSheetId, sheetNameMetaData, feedLastUrlCell,
+                    feedDetails[0].link.toString());
                 runtime:sleep(0.75);
                 if setLastRecord is error {
-                    log:printError(setAlertMessage(nameOfFeed + ":- Cannot update the lastest record. " + setLastRecord.toString()));
+                    log:printError(setAlertMessage(nameOfFeed + ":- Cannot update the latest record. " + setLastRecord.toString()));
                     return;
                 }
                 log:printInfo("Last record is updated.");
@@ -339,7 +334,7 @@ public function newFeedAddingProcess(string nameOfFeed, ItemDetails[] feedDetail
             }
 
         } else {
-
+          
             //assign the i th index of feedDetail's data into passData json variable.
             json passData = {
                 pubDate: feedDetails[i].pubDate,
@@ -391,12 +386,15 @@ public function newFeedAddingProcess(string nameOfFeed, ItemDetails[] feedDetail
             error? appendRow = sheetsEp->appendRowToSheet(spreadSheetId, sheetName, vals);
             runtime:sleep(0.75);
             if appendRow is error {
-                log:printError(setAlertMessage(nameOfFeed.toString() + " :- error occurs when sending data to the spread sheet. " + appendRow.toString()));
+                log:printError(setAlertMessage(nameOfFeed.toString() + " :- error occurs when sending data to the spread sheet. " 
+                    + appendRow.toString()));
                 //updating the latest record as the last record. index 0 includes the newest record!
-                error? setLastRecord = sheetsEp->setCell(spreadSheetId, sheetNameMetaData, feedLastUrlCell, feedDetails[0].link.toString());
+                error? setLastRecord = sheetsEp->setCell(spreadSheetId, sheetNameMetaData, feedLastUrlCell, 
+                    feedDetails[0].link.toString());
                 runtime:sleep(0.75);
                 if setLastRecord is error {
-                    log:printError(setAlertMessage(nameOfFeed + ":- Cannot update the lastest record. " + setLastRecord.toString()));
+                    log:printError(setAlertMessage(nameOfFeed + ":- Cannot update the latest record. " + 
+                    setLastRecord.toString()));
                     return;
                 }
                 log:printInfo("Last record is updated.");
@@ -405,7 +403,7 @@ public function newFeedAddingProcess(string nameOfFeed, ItemDetails[] feedDetail
             }
         }
 
-        log:printInfo(nameOfFeed.toString() + ":- " + records.length().toString() + " records are send to the google sheet (2nd)");
+        log:printInfo(nameOfFeed.toString() + ":- " + records.length().toString() + " records are send to the Spreadsheet (2nd)");
 
     } else {
         log:printError(setAlertMessage(nameOfFeed.toString() + ":- error in the filtering. Check Choreo logs."));
@@ -416,7 +414,7 @@ public function newFeedAddingProcess(string nameOfFeed, ItemDetails[] feedDetail
     error? setLastRecord = sheetsEp->setCell(spreadSheetId, sheetNameMetaData, feedLastUrlCell, feedDetails[0].link.toString());
     runtime:sleep(0.75);
     if setLastRecord is error {
-        log:printError(setAlertMessage(nameOfFeed + ":- Cannot update the lastest record. " + setLastRecord.toString()));
+        log:printError(setAlertMessage(nameOfFeed + ":- Cannot update the latest record. " + setLastRecord.toString()));
         return;
     }
     log:printInfo("Last record is updated.");
@@ -433,9 +431,7 @@ public function getDate(decimal seconds) returns string {
     time:Civil civil = time:utcToCivil(utc);
     json getTime = civil.toJson();
     map<json> mapDate = <map<json>>getTime;
-    string date = mapDate["month"].toString() + "/" + mapDate["day"].toString() + "/"
-        + mapDate["year"].toString();
-
+    string date = mapDate["month"].toString() + "/" + mapDate["day"].toString() + "/" + mapDate["year"].toString();
     return date;
 }
 
@@ -489,10 +485,8 @@ public function getTime(decimal seconds) returns string {
 public function clearText(json text) returns string|error {
     string theText = "";
     string[][] replaceChar = [
-        ["\\[", ""],["\\]", ""],["\",\"", ""],
-        ["\"", ""],["&lt;", "<"],["&gt;", ">"],
-        ["<.*?>", ""],["&amp;", "&"],["#38;", ""],
-        ["nbsp;", "'"],["&.*?;", ""]
+        ["\\[", ""],["\\]", ""],["\",\"", ""],["\"", ""],["&lt;", "<"],["&gt;", ">"],["<.*?>", ""],["&amp;", "&"],
+        ["#38;", ""],["nbsp;", "'"],["&.*?;", ""]
     ];
     if text.toString().includes("\"#content\"") {
 
@@ -543,7 +537,6 @@ public function setAlertMessage(string alert) returns string {
 # (here p1,p2,pn refers parameters of the function)
 # + return - null or error.
 public function tiFeeds() returns error? {
-    io:println(getDate(0));
 
     int|string|decimal startingRowNum = 0;
     string lastColumn = "";
@@ -615,7 +608,6 @@ public function tiFeeds() returns error? {
         }
 
         json getClientData = {};
-        io:println(feedEndPoint.toString());
         http:Client httpClient; 
         http:Response response;
         do {
@@ -623,10 +615,13 @@ public function tiFeeds() returns error? {
             response = check httpClient->get("");
         } on fail {
             isInvalidEndpoint = true;
+            
         }
 
         if isInvalidEndpoint == true {
-            log:printError(setAlertMessage(feedName + " :- Invalid url. Please check the entered url in the spread sheet."));
+            log:printError(setAlertMessage(feedName + 
+                " :- Invalid url or an error occures in httpClient module. Please check the entered url in the Spreadsheet."));
+            log:printError(check response.getTextPayload());
             currentRowNumber = currentRowNumber + 1;
             continue;
         }
@@ -658,7 +653,6 @@ public function tiFeeds() returns error? {
 
         }
         if getClientData == "".toJson() {
-
             log:printError(setAlertMessage(feedName + " :- Content is empty"));
             currentRowNumber = currentRowNumber + 1;
             continue;
@@ -695,7 +689,7 @@ public function tiFeeds() returns error? {
             descriptionTag = "summary";
             urlTag = "url";
         } else {
-            log:printError(setAlertMessage(feedName + " :- Feed format is not 'rss' , 'atom' or 'other/json'"));
+            log:printError(setAlertMessage(feedName + " :- Feed format is not 'rss' , 'atom' or 'defined json' format"));
             currentRowNumber = currentRowNumber + 1;
             continue;
         }
@@ -710,15 +704,12 @@ public function tiFeeds() returns error? {
         do {
 
             if getLastItemIndex > 1 {
-
                 AccessingFeild = (<map<json>>getClientData)[fieldAccesTags[0]];
-
                 if (getLastItemIndex == 2) {
                     //do nothing
                 } else {
                     foreach int i in 1 ... getLastItemIndex - 2 {
                         AccessingFeild = (<map<json>>AccessingFeild)[fieldAccesTags[i]];
-
                     }
                 }
 
@@ -738,7 +729,6 @@ public function tiFeeds() returns error? {
             log:printError(setAlertMessage(feedName + " :- mismatch with the feild accessing tags or content is empty"));
             currentRowNumber = currentRowNumber + 1;
             continue;
-
         } else {
             ItemDetails[] feedItems = [];
             int numOfItems = 0;
@@ -777,12 +767,12 @@ public function tiFeeds() returns error? {
                         log:printError("error in getting the description");
 
                     } else {
-                        //reduce the content to first 500 words.
+                        //reduce the content to first 150 words.
                         string[] splitDes = regex:split(cleanDiscription, " ");
                         int countWords = 0;
                         string reduceContentOfDes = "";
                         foreach string word in splitDes {
-                            if countWords <= 500 {
+                            if countWords <= 150 {
                                 reduceContentOfDes = reduceContentOfDes + " " + word;
                             }
                             countWords = countWords + 1;
@@ -810,9 +800,10 @@ public function tiFeeds() returns error? {
             }
 
             string feedLastUrlCell = "C" + currentRowNumber.toString();
-            error? addFeed = newFeedAddingProcess(feedName, feedItems, sheetsEp, feedLastUrlCell, feedShouldFiltered, mlFilteringMode);
+            error? addFeed = newFeedAddingProcess(feedName, feedItems, sheetsEp, feedLastUrlCell, feedShouldFiltered,
+                mlFilteringMode);
             if addFeed is error {
-                log:printError(setAlertMessage(feedName + " :- error in adding feeds process"));
+                log:printError(setAlertMessage(feedName + " :- An error occurs in adding feeds process"));
                 currentRowNumber = currentRowNumber + 1;
                 continue;
             }

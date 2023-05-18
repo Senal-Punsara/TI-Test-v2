@@ -41,7 +41,7 @@ public function main() returns error? {
          string getLastExecuteTime = getVals[0][0].toString();
           string getStatus = getVals[0][1].toString();
         if getStatus == "Running" {
-            log:printInfo(setAlertMessage("Program is still running. Execution started time :- " + getLastExecuteTime));
+            log:printInfo(setAlertMessage("Program is still running.Last execution started time :- " + getLastExecuteTime));
             string nextExecutionTimeCell = "C3";
             string nextDate = getDate(900);
             string nextTime = getTime(900);

@@ -6,3 +6,7 @@
 # keywords which are need for filtering feeds.keywords should be in lowercase !!!
  keyWordsLowerCase = ["google", "microsoft", "apple", " aws ", "amazon", "kubernetes", "macos", "jsonwebtoken"," jwt ", "oauth",
              "azure","cisco","openssl","openssh","ubuntu"]
+
+
+
+
