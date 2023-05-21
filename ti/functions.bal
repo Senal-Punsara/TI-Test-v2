@@ -17,7 +17,7 @@ import ballerina/lang.'int;
 # Calling the machine learing model endpoint for filtering the threat intel feeds.
 #
 # + text - feed which need to be filtered.
-# + return - a string  ('relevent' or 'not_relevent')
+# + return - a string  ('relevent' or 'not_relevent').
 public function mlFilteringModel(string text) returns int|error {
 
     string[] replaceChar = ["\\n", "[^a-zA-Z0-9\\s]"];
@@ -63,11 +63,32 @@ public function mlFilteringModel(string text) returns int|error {
     }
 }
 
-# Check the similarity of two strings
+
+# reduce the content of a string by given word amount.
 #
-# + s1 - First string  
-# + s2 - Second string
-# + return - similarityScore (float value)
+# + content - string which is needed to reduce the content.
+# + amount - amount.
+# + return - content reduced string.
+public function reduceContent (string content, int amount) returns string{
+    //reduce the content to first 20 words in the description.
+        string[] splitDes = regex:split(content, " ");
+        int countWords = 0;
+        string reduceContentOfDes = "";
+        foreach string word in splitDes {
+            if countWords <= amount {
+                reduceContentOfDes = reduceContentOfDes + " " + word;
+            }
+            countWords = countWords + 1;
+        }
+        return reduceContentOfDes;
+}
+
+
+# Check the similarity of two strings.
+#
+# + s1 - First string.
+# + s2 - Second string.
+# + return - similarityScore (float value).
 public function similarity(string s1, string s2) returns float {
     int len1 = s1.length();
     int len2 = s2.length();
@@ -94,9 +115,9 @@ public function similarity(string s1, string s2) returns float {
         }
     }
 
-    // The Levenshtein Distance is the value in the bottom-right cell of the matrix
+    // The Levenshtein Distance is the value in the bottom-right cell of the matrix.
     // The similarity score is the inverse of the Levenshtein Distance, normalized by the length of the longer 
-    // string
+    // string.
     
     float similarityScore = <float>(1-<float>(matrix[len1][len2]) /<float>(int:max(len1,len2)));
 
@@ -133,7 +154,7 @@ public function filteringFeeds(json feedDetails, sheets:Client sheetsEp, string 
                     mlFiltered = mlFilteringModel(text);
                     runtime:sleep(0.50);
                     if mlFiltered is error || mlFiltered == -1 {
-                        log:printError("An error occures in the machine learning filtering");
+                        log:printError("An error occurred  in the machine learning filtering.");
                         return -1;
                     } else if mlFiltered == 1 {
                         mainFiltering = true;
@@ -141,7 +162,7 @@ public function filteringFeeds(json feedDetails, sheets:Client sheetsEp, string 
                 } else if mlFilteringMode == "off" {
                     mainFiltering = true;
                 } else {
-                    log:printError("ML Filtering mode value is not either 'on' or 'off'. Check out the Spread Sheet.");
+                    log:printError("ML Filtering mode value is not either 'on' or 'off'. Check the Spreadsheet.");
                     return -1;
                 }
                 break;
@@ -203,7 +224,7 @@ public function filteringFeeds(json feedDetails, sheets:Client sheetsEp, string 
                     error? appendCveNumbers = sheetsEp->appendRowToSheet(spreadSheetId, sheetNameCveIds, temp);
                     runtime:sleep(0.75);
                     if appendCveNumbers is error {
-                        log:printError("An error occurs when sending CVE numbers to the Spreadshaeet.");
+                        log:printError("An error occurred  when sending CVE numbers to the Spreadshaeet.");
                         return -1;
                     }
                 }
@@ -211,7 +232,7 @@ public function filteringFeeds(json feedDetails, sheets:Client sheetsEp, string 
 
         }
         else {
-            log:printError("An error occurs when getting CVE numbers from the Spreadshaeet.");
+            log:printError("An error occurred when getting CVE numbers from the Spreadshaeet.");
             return -1;
         }
     }
@@ -225,7 +246,6 @@ public function filteringFeeds(json feedDetails, sheets:Client sheetsEp, string 
             filteringFlag = 1;
         }
     }
-
     return filteringFlag;
 }
 
@@ -234,55 +254,51 @@ public function filteringFeeds(json feedDetails, sheets:Client sheetsEp, string 
 # + nameOfFeed - name of the feed. eg:- hackernews, bleeping computer.   
 # + feedDetails - a record which includes all feed details of a specific threat intel.   
 # + sheetsEp - sheet client endpoint.   
-# + feedLastUrlCell - cell of the url which is recorded as the latest url of a feed in the Spreadsheet.  
+# + feedLastRecCellRange - cell range of latest feed record (includes url and title + description).  
+# + feedLastRecUrl - TI source's latest feed url which is recorded in the Spreadsheet.
+# + feedLastRecTitelAndDes - lastest feed record's title + description.
 # + feedShouldFiltered - feed should be filtered or not
 # + mlFilteringMode - feed should be filtered using mlModel or not.
 # + return - null or error.
 public function newFeedAddingProcess(string nameOfFeed, ItemDetails[] feedDetails, sheets:Client sheetsEp,
-        string feedLastUrlCell, string feedShouldFiltered, string mlFilteringMode) returns error? {
+        string feedLastRecCellRange, string feedLastRecUrl, string feedLastRecTitelAndDes, string feedShouldFiltered, 
+        string mlFilteringMode) returns error? {
 
     //new feeds will be added to the records.
     string[][] records = [];
-
-    int|string|decimal lastRecFeedUrl;
-
-    //get the url of the latest record of relevant feed from the spreadsheet.
-    sheets:Cell|error getLastRecFeedUrl = sheetsEp->getCell(spreadSheetId, sheetNameMetaData, feedLastUrlCell);
-    runtime:sleep(0.75);
-    if getLastRecFeedUrl is sheets:Cell {
-        lastRecFeedUrl = getLastRecFeedUrl.value;
-    } else {
-        log:printError(setAlertMessage(nameOfFeed + " :- Cannot get the last record's url. " + getLastRecFeedUrl.toString()));
-        return;
-    }
-
     boolean isErrorInFiltering = false;
-
+    
     foreach int i in 0 ..< feedDetails.length() {
-        //if a threat intel is new to the system 
-        if lastRecFeedUrl == "new_feed" {
 
-            error? setLastRecord = sheetsEp->setCell(spreadSheetId, sheetNameMetaData, feedLastUrlCell, 
-                feedDetails[0].link.toString());
+        //if a threat intel is new to the system 
+        if feedLastRecUrl == "new_feed" {
+            string[][] entries = [[feedDetails[0].link.toString(), feedDetails[0].title.toString() + " " + 
+                reduceContent(feedDetails[0].description.toString(), 30)]];
+            sheets:Range setRange = {a1Notation: feedLastRecCellRange, values: entries};
+            error? setLastRecord = sheetsEp->setRange(spreadSheetId, sheetNameMetaData, setRange);
             runtime:sleep(0.75);
             if setLastRecord is error {
-                log:printError(setAlertMessage(nameOfFeed + " :- Cannot add the TI feed. " + setLastRecord.toString()));
+                log:printError(setAlertMessage(nameOfFeed + " :- Failed to add the TI feed. " + setLastRecord.toString()));
                 return;
             }
             log:printInfo(setAlertMessage(nameOfFeed + " TI feed is added."));
             return;
         }
+      
+        // i th index feed's title and description which is in feedDetails array.
+        string indexIFeedTitleAndDes = feedDetails[i].title.toString() + " " + reduceContent(feedDetails[i].description.toString(), 30);
 
-        //checking latest feed url in feedDetails is equal with lastRecFeedUrl
-        if feedDetails[i].link.toString() == lastRecFeedUrl || similarity(feedDetails[i].link.toString(),
-            lastRecFeedUrl.toString()) > 0.98 {
-              
+        //checking latest feed url in feedDetails is equal with feedLastRecUrl or similarity between indexIFeedTitleAndDes and 
+        //feedLastRecTitelAndDes.
+        if feedDetails[i].link.toString() == feedLastRecUrl || similarity(indexIFeedTitleAndDes, feedLastRecTitelAndDes) > 0.8 {
+            log:printInfo(similarity(indexIFeedTitleAndDes, feedLastRecTitelAndDes).toString());
+            log:printInfo(indexIFeedTitleAndDes);
+            log:printInfo(feedLastRecTitelAndDes);
             if i == 0 {
                 //this means Last record  of relevant feed is still the latest feed.
                 log:printInfo("Up to date");
                 return;
             } else {
-
                 if isErrorInFiltering == false {
                     string[][] reverserecords = records.reverse();
 
@@ -297,13 +313,15 @@ public function newFeedAddingProcess(string nameOfFeed, ItemDetails[] feedDetail
                         error? appendRow = sheetsEp->appendRowToSheet(spreadSheetId, sheetName, vals);
                         runtime:sleep(0.75);
                         if appendRow is error {
-                            log:printError(setAlertMessage(nameOfFeed + " :- An error occurs when sending data to the spread sheet."));
+                            log:printError(setAlertMessage(nameOfFeed + " :- An error occurred  when sending data to the Spreadsheet."));
                             //updating the latest record as the last record. index 0 includes the newest record!
-                            error? setLastRecord = sheetsEp->setCell(spreadSheetId, sheetNameMetaData, feedLastUrlCell, 
-                                feedDetails[0].link.toString());
+                            string[][] entries = [[feedDetails[0].link.toString(), feedDetails[0].title.toString() + " " + 
+                                reduceContent(feedDetails[0].description.toString(), 30)]];
+                            sheets:Range setRange = {a1Notation: feedLastRecCellRange, values: entries};
+                            error? setLastRecord = sheetsEp->setRange(spreadSheetId, sheetNameMetaData, setRange);
                             runtime:sleep(0.75);
                             if setLastRecord is error {
-                                log:printError(setAlertMessage(nameOfFeed + ":- Cannot update the latest record. " 
+                                log:printError(setAlertMessage(nameOfFeed + ":- Failed to update the latest record. " 
                                 + setLastRecord.toString()));
                                 return;
                             }
@@ -313,20 +331,22 @@ public function newFeedAddingProcess(string nameOfFeed, ItemDetails[] feedDetail
                         }
                     }
 
-                    log:printInfo(records.length().toString() + " records are send to the Spreadsheet (1st)");
+                    log:printInfo(records.length().toString() + " records are send to the Spreadsheet (1st).");
 
                 } else {
-                    log:printError(setAlertMessage(nameOfFeed + 
-                    " :- An error occurs in the filtering process. Please check Choreo logs for further information."));
+                    log:printError(setAlertMessage(nameOfFeed + " :- An error occurred  in the filtering process." +
+                        " Please check Choreo logs for further information."));
 
                 }
 
                 //updating the latest record as the last record. index 0 includes the newest record!
-                error? setLastRecord = sheetsEp->setCell(spreadSheetId, sheetNameMetaData, feedLastUrlCell,
-                    feedDetails[0].link.toString());
+                string[][] entries = [[feedDetails[0].link.toString(), feedDetails[0].title.toString() + " " + 
+                reduceContent(feedDetails[0].description.toString(), 30)]];
+                sheets:Range setRange = {a1Notation: feedLastRecCellRange, values: entries};
+                error? setLastRecord = sheetsEp->setRange(spreadSheetId, sheetNameMetaData, setRange);
                 runtime:sleep(0.75);
                 if setLastRecord is error {
-                    log:printError(setAlertMessage(nameOfFeed + ":- Cannot update the latest record. " + setLastRecord.toString()));
+                    log:printError(setAlertMessage(nameOfFeed + ":- Failed to update the latest record. " + setLastRecord.toString()));
                     return;
                 }
                 log:printInfo("Last record is updated.");
@@ -361,7 +381,7 @@ public function newFeedAddingProcess(string nameOfFeed, ItemDetails[] feedDetail
                 //push the filtered feed into records array.
                 records.push(values);
             } else if isFiltered == -1 || isFiltered is error {
-                log:printError("filtering error ");
+                log:printError("Filtering error.");
                 isErrorInFiltering = true;
 
             }
@@ -386,14 +406,16 @@ public function newFeedAddingProcess(string nameOfFeed, ItemDetails[] feedDetail
             error? appendRow = sheetsEp->appendRowToSheet(spreadSheetId, sheetName, vals);
             runtime:sleep(0.75);
             if appendRow is error {
-                log:printError(setAlertMessage(nameOfFeed.toString() + " :- error occurs when sending data to the spread sheet. " 
+                log:printError(setAlertMessage(nameOfFeed.toString() + " :- An error occurred  when sending data to the Spreadsheet. " 
                     + appendRow.toString()));
                 //updating the latest record as the last record. index 0 includes the newest record!
-                error? setLastRecord = sheetsEp->setCell(spreadSheetId, sheetNameMetaData, feedLastUrlCell, 
-                    feedDetails[0].link.toString());
+                string[][] entries = [[feedDetails[0].link.toString(), feedDetails[0].title.toString() + " " +
+                    reduceContent(feedDetails[0].description.toString(), 30)]];
+                sheets:Range setRange = {a1Notation: feedLastRecCellRange, values: entries};
+                error? setLastRecord = sheetsEp->setRange(spreadSheetId, sheetNameMetaData, setRange);
                 runtime:sleep(0.75);
                 if setLastRecord is error {
-                    log:printError(setAlertMessage(nameOfFeed + ":- Cannot update the latest record. " + 
+                    log:printError(setAlertMessage(nameOfFeed + ":- Failed to update the latest record. " + 
                     setLastRecord.toString()));
                     return;
                 }
@@ -403,18 +425,20 @@ public function newFeedAddingProcess(string nameOfFeed, ItemDetails[] feedDetail
             }
         }
 
-        log:printInfo(nameOfFeed.toString() + ":- " + records.length().toString() + " records are send to the Spreadsheet (2nd)");
+        log:printInfo(nameOfFeed.toString() + ":- " + records.length().toString() + " records are send to the Spreadsheet (2nd).");
 
     } else {
-        log:printError(setAlertMessage(nameOfFeed.toString() + ":- error in the filtering. Check Choreo logs."));
+        log:printError(setAlertMessage(nameOfFeed.toString() + ":- An error occurred in the filtering. Check Choreo logs."));
 
     }
 
     //updating the latest record as the last record. index 0 includes the newest record!
-    error? setLastRecord = sheetsEp->setCell(spreadSheetId, sheetNameMetaData, feedLastUrlCell, feedDetails[0].link.toString());
-    runtime:sleep(0.75);
+    string[][] entries = [[feedDetails[0].link.toString(), feedDetails[0].title.toString() + " " + 
+        reduceContent(feedDetails[0].description.toString(), 30)]];
+    sheets:Range setRange = {a1Notation: feedLastRecCellRange, values: entries};
+    error? setLastRecord = sheetsEp->setRange(spreadSheetId, sheetNameMetaData, setRange);
     if setLastRecord is error {
-        log:printError(setAlertMessage(nameOfFeed + ":- Cannot update the latest record. " + setLastRecord.toString()));
+        log:printError(setAlertMessage(nameOfFeed + ":- Failed to update the latest record. " + setLastRecord.toString()));
         return;
     }
     log:printInfo("Last record is updated.");
@@ -519,6 +543,10 @@ public function clearText(json text) returns string|error {
     return theText;
 }
 
+# Sends alert messages to the Spreadsheet
+#
+# + alert - alert message
+# + return - string
 public function setAlertMessage(string alert) returns string {
     string dateAlert = getDate(0);
     string timeAlert = getTime(0);
@@ -526,7 +554,7 @@ public function setAlertMessage(string alert) returns string {
     string[] alertMessage = [setAlertTime, alert];
     error? appendAlertMsg = sheetsEp->appendRowToSheet(spreadSheetId, sheetNameAlerts, alertMessage);
     if appendAlertMsg is error {
-        log:printError(appendAlertMsg.toString());
+        log:printError("Fail to send the alert to Spreadsheet. ", appendAlertMsg);
     }
     return alert;
 
@@ -550,7 +578,7 @@ public function tiFeeds() returns error? {
     sheets:Range|error getRecordsRange = sheetsEp->getRange(spreadSheetId, sheetNameMetaData, "B1:B4");
     runtime:sleep(0.75);
     if getRecordsRange is error {
-        log:printInfo(setAlertMessage("Cannot get sheet's meta data." + getRecordsRange.toString()));
+        log:printError(setAlertMessage("Failed to get the sheet's metadata. " + getRecordsRange.toString()));
         return;
     } else {
         (int|string|decimal)[][] getVals = getRecordsRange.values;
@@ -561,17 +589,17 @@ public function tiFeeds() returns error? {
     }
 
     if sheetEditingMode == "on" {
-        log:printInfo(setAlertMessage("Spread sheet is in the Editing Mode"));
+        log:printWarn(setAlertMessage("Spreadsheet is in the Editing Mode."));
 
         return;
     }
 
-    //get all Threat Intel sources feed records
+    //get all Threat Intel sources metadata
     string setRange = "A" + startingRowNum.toString() + ":" + lastColumn.toString();
     sheets:Range|error getRecords = sheetsEp->getRange(spreadSheetId, sheetNameMetaData, setRange);
     runtime:sleep(0.75);
     if getRecords is error {
-        log:printInfo(getRecords.toString());
+        log:printError(setAlertMessage("Failed to get Threat Intel metadata. " + getRecords.toString()));
         return;
     } else {
         rssFeedsInfo = getRecords.values;
@@ -589,7 +617,9 @@ public function tiFeeds() returns error? {
         //setting up feed's primary details and validating 
         string feedName = item[0].toString();
         string feedEndPoint = item[1].toString();
-        string feedShouldFiltered = item[3].toString();
+        string feedLastRecUrl = item[2].toString();
+        string feedLastRecTitelAndDes = item[3].toString();
+        string feedShouldFiltered = item[4].toString();
         boolean isInvalidEndpoint = false;
 
         log:printInfo("---- " + feedName + " ----");
@@ -599,7 +629,7 @@ public function tiFeeds() returns error? {
             checkDuplicatesEndpoints.push(feedEndPoint);
         } else {
             if checkDuplicatesEndpoints.indexOf(feedEndPoint) is int {
-                log:printError(setAlertMessage(feedName + " :- feed endpoint is already using."));
+                log:printError(setAlertMessage(feedName + " :- Feed endpoint is already using."));
                 currentRowNumber = currentRowNumber + 1;
                 continue;
             } else {
@@ -614,22 +644,19 @@ public function tiFeeds() returns error? {
             httpClient = check new (feedEndPoint.toString());
             response = check httpClient->get("");
         } on fail {
-            isInvalidEndpoint = true;
-            
+            isInvalidEndpoint = true; 
         }
 
         if isInvalidEndpoint == true {
-            log:printError(setAlertMessage(feedName + 
-                " :- Invalid url or an error occures in httpClient module. Please check the entered url in the Spreadsheet."));
-            log:printError(check response.getTextPayload());
+            log:printError(setAlertMessage(feedName + " :- Invalid url or an error occurred  in httpClient module." + 
+                " Please check the entered url in the Spreadsheet."));
             currentRowNumber = currentRowNumber + 1;
             continue;
         }
 
         if response.statusCode != 200 {
-            log:printError(setAlertMessage(feedName + " :- Error occurs when fetching the details from the endpoint. StatusCode :- "
-                + response.statusCode.toString()));
-
+            log:printError(setAlertMessage(feedName + " :- An error occurred  when fetching the details from the endpoint." + 
+                " Please check the entered url in the Spreadsheet. StatusCode :- " + response.statusCode.toString()));
             currentRowNumber = currentRowNumber + 1;
             continue;
         } else {
@@ -645,15 +672,16 @@ public function tiFeeds() returns error? {
                 do {
                     getClientData = check response.getJsonPayload();
                 } on fail {
-                    log:printError(setAlertMessage(feedName + " :- Feed is not in XML or Json format"));
+                    log:printError(setAlertMessage(feedName + " :- Feed is not in the XML or Json format."));
                     currentRowNumber = currentRowNumber + 1;
                     continue;
                 }
             }
 
         }
+
         if getClientData == "".toJson() {
-            log:printError(setAlertMessage(feedName + " :- Content is empty"));
+            log:printError(setAlertMessage(feedName + " :- The content is empty."));
             currentRowNumber = currentRowNumber + 1;
             continue;
         }
@@ -689,7 +717,7 @@ public function tiFeeds() returns error? {
             descriptionTag = "summary";
             urlTag = "url";
         } else {
-            log:printError(setAlertMessage(feedName + " :- Feed format is not 'rss' , 'atom' or 'defined json' format"));
+            log:printError(setAlertMessage(feedName + " :- Feed format is not 'rss' , 'atom' or 'defined json' format."));
             currentRowNumber = currentRowNumber + 1;
             continue;
         }
@@ -726,7 +754,7 @@ public function tiFeeds() returns error? {
         }
 
         if isErrorInFeildAccessing == true {
-            log:printError(setAlertMessage(feedName + " :- mismatch with the feild accessing tags or content is empty"));
+            log:printError(setAlertMessage(feedName + " :- Mismatch with the feild accessing tags or content is empty."));
             currentRowNumber = currentRowNumber + 1;
             continue;
         } else {
@@ -736,7 +764,7 @@ public function tiFeeds() returns error? {
                 //get first 20 feed items
                 if numOfItems <= 20 {
                     map<json> singleItem = <map<json>>getItems;
-                    // setting up feed details
+                    // setting up the feed details
                     json setLink = singleItem[urlTag];
                     json setPubDate = singleItem[dateTag];
                     json setDiscription = singleItem[descriptionTag];
@@ -747,42 +775,33 @@ public function tiFeeds() returns error? {
                         setPubDate = date + " " + time;
                     }
 
-                    //clean the feed details;
+                    //cleaning the feed details;
                     string|error cleanLink = clearText(setLink);
                     if cleanLink is error {
-                        log:printError("error in getting the link");
+                        log:printError("An error occurred  when getting the link.");
                     } else {
                         setLink = cleanLink;
                     }
 
                     string|error cleanPubDate = clearText(setPubDate);
                     if cleanPubDate is error {
-                        log:printError("error in getting the Published Date");
+                        log:printError("An error occurred  when getting the Published Date.");
                     } else {
                         setPubDate = cleanPubDate;
                     }
 
                     string|error cleanDiscription = clearText(setDiscription);
                     if cleanDiscription is error {
-                        log:printError("error in getting the description");
+                        log:printError("An error occurred  when getting the description.");
 
                     } else {
                         //reduce the content to first 150 words.
-                        string[] splitDes = regex:split(cleanDiscription, " ");
-                        int countWords = 0;
-                        string reduceContentOfDes = "";
-                        foreach string word in splitDes {
-                            if countWords <= 150 {
-                                reduceContentOfDes = reduceContentOfDes + " " + word;
-                            }
-                            countWords = countWords + 1;
-                        }
-                        setDiscription = reduceContentOfDes;
+                        setDiscription = reduceContent(cleanDiscription,150);
                     }
 
                     string|error cleanTitle = clearText(setTitle);
                     if cleanTitle is error {
-                        log:printError("error in getting the title");
+                        log:printError("An error occurred  when getting the title.");
                     } else {
                         setTitle = cleanTitle;
                     }
@@ -799,11 +818,11 @@ public function tiFeeds() returns error? {
                 numOfItems = numOfItems + 1;
             }
 
-            string feedLastUrlCell = "C" + currentRowNumber.toString();
-            error? addFeed = newFeedAddingProcess(feedName, feedItems, sheetsEp, feedLastUrlCell, feedShouldFiltered,
-                mlFilteringMode);
+            string feedLastRecCellRange = "C" + currentRowNumber.toString() + ":" + "D" + currentRowNumber.toString();
+            error? addFeed = newFeedAddingProcess(feedName, feedItems, sheetsEp, feedLastRecCellRange , feedLastRecUrl,
+                feedLastRecTitelAndDes, feedShouldFiltered, mlFilteringMode);
             if addFeed is error {
-                log:printError(setAlertMessage(feedName + " :- An error occurs in adding feeds process"));
+                log:printError(setAlertMessage(feedName + " :- An error occurred in the feeds adding process."));
                 currentRowNumber = currentRowNumber + 1;
                 continue;
             }

@@ -33,53 +33,52 @@ sheets:ConnectionConfig spreadSheetConfig = {
 sheets:Client sheetsEp = check new (spreadSheetConfig);
 
 public function main() returns error? {
-    string LastExecuTimeAndStatusCells = "A3:B3";
-    sheets:Range|error getLastExecuTimeAndStatus = sheetsEp->getRange(spreadSheetId, sheetNameAlerts, LastExecuTimeAndStatusCells);
+    
+    sheets:Range|error getLastExecuTimeAndStatus = sheetsEp->getRange(spreadSheetId, sheetNameAlerts, 
+        LAST_EXECUTION_TIME_AND_STATUS_CELLS);
     runtime:sleep(1);
     if getLastExecuTimeAndStatus is sheets:Range {
-         (int|string|decimal)[][] getVals = getLastExecuTimeAndStatus.values;
-         string getLastExecuteTime = getVals[0][0].toString();
-          string getStatus = getVals[0][1].toString();
+        (int|string|decimal)[][] getVals = getLastExecuTimeAndStatus.values;
+        string getLastExecuteTime = getVals[0][0].toString();
+        string getStatus = getVals[0][1].toString();
         if getStatus == "Running" {
-            log:printInfo(setAlertMessage("Program is still running.Last execution started time :- " + getLastExecuteTime));
-            string nextExecutionTimeCell = "C3";
+            log:printInfo(setAlertMessage("Program is still running. Last execution started time :- " + getLastExecuteTime));
             string nextDate = getDate(900);
             string nextTime = getTime(900);
             string nextExecutionTime = nextDate + " at " + nextTime;
-            error? updateNextExecutionTime = sheetsEp->setCell(spreadSheetId, sheetNameAlerts, nextExecutionTimeCell, nextExecutionTime);
+            error? updateNextExecutionTime = sheetsEp->setCell(spreadSheetId, sheetNameAlerts, NEXT_EXECUTION_TIME_CELL, nextExecutionTime);
             if updateNextExecutionTime is error {
-                log:printInfo(updateNextExecutionTime.toString());
+                log:printError("Failed to update the next execution time. ", updateNextExecutionTime);
                 return;
             }
             return;
         }
     } else {
-        log:printError("Cannot get the Cell details. " + getLastExecuTimeAndStatus.toString());
+        log:printError("Failed to get the Cell details. ", getLastExecuTimeAndStatus);
         return;
     }
 
-    string statusRange = "A3:C3";
     string startedDate = getDate(0);
     string startedTime = getTime(0);
     string nextDate = getDate(900);
     string nextTime = getTime(900);
-    string status = "Running";
-    string[][] entries = [[startedDate + " at " + startedTime, status, nextDate + " at " + nextTime]];
-    sheets:Range range = {a1Notation: statusRange, values: entries};
+
+    string[][] entries = [[startedDate + " at " + startedTime, RUNNING_STATE, nextDate + " at " + nextTime]];
+    sheets:Range range = {a1Notation: STATUS_RANGE, values: entries};
     error? setStatusRange = sheetsEp->setRange(spreadSheetId, sheetNameAlerts, range);
     if setStatusRange is error {
-        log:printInfo(setStatusRange.toString());
+        log:printError("Failed to set status range. ", setStatusRange);
         return;
     }
     runtime:sleep(1);
     error? addFeedsToSpreadSheet = tiFeeds();
     if addFeedsToSpreadSheet is error {
-        log:printError("unsuccess");
+        log:printError("Failed in feed details adding process.");
     } 
-    string statusCell = "B3";
-    error? updateStatusCell = sheetsEp->setCell(spreadSheetId, sheetNameAlerts, statusCell, "Executed");
+
+    error? updateStatusCell = sheetsEp->setCell(spreadSheetId, sheetNameAlerts, STATUS_CELL, EXECUTED_STATE);
     if updateStatusCell is error {
-        log:printError("Unable to update the status cell "+updateStatusCell.toString());
+        log:printError("Unable to update the status cell. ", updateStatusCell);
         return;
     }
 }
