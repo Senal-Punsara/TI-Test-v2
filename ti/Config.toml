@@ -6,11 +6,9 @@
 # Keywords which are needed for filtering feeds. Keywords should be in the lowercase !!!
  keyWordsLowerCase = ["google", "microsoft", "apple", " aws ", "amazon", "kubernetes", "macos", "jsonwebtoken"," jwt ", "oauth",
              "azure","cisco","openssl","openssh","ubuntu"]
-# Secrets 
-refreshToken = ""
-clientId = ""
-clientSecret = ""
-spreadSheetId = ""
-mlModelBearerToken = ""
-# Machine learning model's endpoint url
-mlModelBaseUrl = "http://20.7.83.45:80/api/v1/service/mlfiltering/score"
+refreshToken = "1//04cQ49pQcf-VYCgYIARAAGAQSNwF-L9IrXAwWADBhQK7mr4XHsswczZZ1In_gLVydTC0jBsjNpFqOdV5-4prpIgXXn5qxRkvjVzg"
+clientId = "1066255901198-6tre43r00pvl4n1i3sm0e04hpm668mm7.apps.googleusercontent.com"
+clientSecret = "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"
+spreadSheetId = "1USxVRgzyxs2q6JJhaPRswUYf6j-sgP6_utinCOrRx8k"
+mlModelBaseUrl = "http://20.241.145.95:80/api/v1/service/mlfiltering/score"
+mlModelBearerToken = "K2uQUbvjUY28RtvemIdNf5J39QPvTWyM"
