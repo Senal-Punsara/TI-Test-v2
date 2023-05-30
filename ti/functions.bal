@@ -296,8 +296,8 @@ public function addNewFeeds(string nameOfFeed, ItemDetails[] feedDetails, sheets
                             reverserecords[x][3],
                             reverserecords[x][4]
                         ];
-                        sheets:A1Range setSheetName = {sheetName:sheetNameAlerts};
-                        error|sheets:ValueRange appendRow = sheetsEp->appendValue(spreadSheetId, vals,setSheetName);
+                        sheets:A1Range setSheetName = {sheetName:sheetNameRecords};
+                        error|sheets:ValueRange appendRow = sheetsEp->appendValue(spreadSheetId, vals, setSheetName);
                         runtime:sleep(0.75);
                         if appendRow is error {
                             log:printError(check setAlertMessage(nameOfFeed + " :- An error occurred  when sending data to the Spreadsheet."));
@@ -399,7 +399,7 @@ public function addNewFeeds(string nameOfFeed, ItemDetails[] feedDetails, sheets
                 reverserecords[x][3],
                 reverserecords[x][4]
             ];
-            sheets:A1Range setSheetName = {sheetName:sheetName};
+            sheets:A1Range setSheetName = {sheetName:sheetNameRecords};
             error|sheets:ValueRange appendRow = sheetsEp->appendValue(spreadSheetId, vals, setSheetName);
             runtime:sleep(0.75);
             if appendRow is error {
