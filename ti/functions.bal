@@ -205,7 +205,8 @@ public function filterFeeds(json feedDetails, sheets:Client sheetsEp, string fee
 
                 foreach string cveNum in addCevNumbers {
                     string[] cveNumberAndDate = [cveNum, check getDate(0)];
-                    error? appendCveNumbers = sheetsEp->appendRowToSheet(spreadSheetId, sheetNameCveIds, cveNumberAndDate);
+                    sheets:A1Range setSheetName = {sheetName:sheetNameCveIds};
+                    error|sheets:ValueRange appendCveNumbers = sheetsEp->appendValue(spreadSheetId,cveNumberAndDate,setSheetName);
                     runtime:sleep(0.75);
                     if appendCveNumbers is error {
                         log:printError("An error occurred  when sending CVE numbers to the Spreadshaeet.");
@@ -295,7 +296,8 @@ public function addNewFeeds(string nameOfFeed, ItemDetails[] feedDetails, sheets
                             reverserecords[x][3],
                             reverserecords[x][4]
                         ];
-                        error? appendRow = sheetsEp->appendRowToSheet(spreadSheetId, sheetName, vals);
+                        sheets:A1Range setSheetName = {sheetName:sheetNameAlerts};
+                        error|sheets:ValueRange appendRow = sheetsEp->appendValue(spreadSheetId, vals,setSheetName);
                         runtime:sleep(0.75);
                         if appendRow is error {
                             log:printError(check setAlertMessage(nameOfFeed + " :- An error occurred  when sending data to the Spreadsheet."));
@@ -397,7 +399,8 @@ public function addNewFeeds(string nameOfFeed, ItemDetails[] feedDetails, sheets
                 reverserecords[x][3],
                 reverserecords[x][4]
             ];
-            error? appendRow = sheetsEp->appendRowToSheet(spreadSheetId, sheetName, vals);
+            sheets:A1Range setSheetName = {sheetName:sheetName};
+            error|sheets:ValueRange appendRow = sheetsEp->appendValue(spreadSheetId, vals, setSheetName);
             runtime:sleep(0.75);
             if appendRow is error {
                 log:printError(check setAlertMessage(nameOfFeed.toString() + " :- An error occurred  when sending data to the Spreadsheet. " 
@@ -551,7 +554,8 @@ public function setAlertMessage(string alert) returns string|error {
     string timeAlert = check getTime(0);
     string setAlertTime = string:'join(" at ",dateAlert,timeAlert);
     string[] alertMessage = [setAlertTime, alert];
-    error? appendAlertMsg = sheetsEp->appendRowToSheet(spreadSheetId, sheetNameAlerts, alertMessage);
+    sheets:A1Range setSheetName = {sheetName:sheetNameAlerts};
+    error|sheets:ValueRange appendAlertMsg = sheetsEp->appendValue(spreadSheetId, alertMessage, setSheetName);
     if appendAlertMsg is error {
         log:printError("Fail to send the alert to Spreadsheet. ", appendAlertMsg);
     }
