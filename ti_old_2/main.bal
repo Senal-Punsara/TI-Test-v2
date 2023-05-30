@@ -5,9 +5,9 @@
 // herein in any form is strictly forbidden, unless permitted by WSO2 expressly.
 // You may not alter or remove any copyright or other notice from copies of this content.
 
+import ballerinax/googleapis.sheets;
 import ballerina/lang.runtime;
 import ballerina/log;
-import ballerinax/googleapis.sheets;
 
 configurable string refreshToken = ?;
 configurable string clientId = ?;
@@ -21,6 +21,7 @@ configurable string[] keyWordsLowerCase = ?;
 configurable string mlModelBaseUrl = ?;
 configurable string mlModelBearerToken = ?;
 
+
 sheets:ConnectionConfig spreadSheetConfig = {
     auth: {
         clientId: clientId,
@@ -32,6 +33,7 @@ sheets:ConnectionConfig spreadSheetConfig = {
 sheets:Client sheetsEp = check new (spreadSheetConfig);
 
 public function main() returns error? {
+    
     sheets:Range|error getLastExecuTimeAndStatus = sheetsEp->getRange(spreadSheetId, sheetNameAlerts, 
         LAST_EXECUTION_TIME_AND_STATUS_CELLS);
     runtime:sleep(1);
@@ -40,10 +42,10 @@ public function main() returns error? {
         string getLastExecuteTime = getVals[0][0].toString();
         string getStatus = getVals[0][1].toString();
         if getStatus == "Running" {
-            log:printInfo(check setAlertMessage("Program is still running. Last execution started time :- " + getLastExecuteTime));
-            string nextDate = check getDate(900);
-            string nextTime = check getTime(900);
-            string nextExecutionTime =string:'join(" at ",nextDate,nextTime) ;
+            log:printInfo(setAlertMessage("Program is still running. Last execution started time :- " + getLastExecuteTime));
+            string nextDate = getDate(900);
+            string nextTime = getTime(900);
+            string nextExecutionTime = nextDate + " at " + nextTime;
             error? updateNextExecutionTime = sheetsEp->setCell(spreadSheetId, sheetNameAlerts, NEXT_EXECUTION_TIME_CELL, nextExecutionTime);
             if updateNextExecutionTime is error {
                 log:printError("Failed to update the next execution time. ", updateNextExecutionTime);
@@ -56,24 +58,22 @@ public function main() returns error? {
         return;
     }
 
-    string startedDate = check getDate(0);
-    string startedTime = check getTime(0);
-    string nextDate = check getDate(900);
-    string nextTime = check getTime(900);
+    string startedDate = getDate(0);
+    string startedTime = getTime(0);
+    string nextDate = getDate(900);
+    string nextTime = getTime(900);
 
     string[][] entries = [[startedDate + " at " + startedTime, RUNNING_STATE, nextDate + " at " + nextTime]];
     sheets:Range range = {a1Notation: STATUS_RANGE, values: entries};
-
     error? setStatusRange = sheetsEp->setRange(spreadSheetId, sheetNameAlerts, range);
     if setStatusRange is error {
         log:printError("Failed to set status range. ", setStatusRange);
         return;
     }
     runtime:sleep(1);
-
     error? addFeedsToSpreadSheet = tiFeeds();
     if addFeedsToSpreadSheet is error {
-        log:printError("Failed in feed details adding process.", addFeedsToSpreadSheet);
+        log:printError("Failed in feed details adding process.");
     } 
 
     error? updateStatusCell = sheetsEp->setCell(spreadSheetId, sheetNameAlerts, STATUS_CELL, EXECUTED_STATE);

@@ -17,3 +17,4 @@ public type ItemDetails record {
     json  title;
     json  pubDate;
 };
+

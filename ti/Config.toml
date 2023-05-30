@@ -6,12 +6,11 @@
 # Keywords which are needed for filtering feeds. Keywords should be in the lowercase !!!
  keyWordsLowerCase = ["google", "microsoft", "apple", " aws ", "amazon", "kubernetes", "macos", "jsonwebtoken"," jwt ", "oauth",
              "azure","cisco","openssl","openssh","ubuntu"]
+# Secrets 
 refreshToken = ""
 clientId = ""
 clientSecret = ""
 spreadSheetId = ""
 mlModelBearerToken = ""
 # Machine learning model's endpoint url
-mlModelBaseUrl = "http://20.94.36.14:80/api/v1/service/mlfiltering/score"
-
-
+mlModelBaseUrl = "http://20.7.83.45:80/api/v1/service/mlfiltering/score"

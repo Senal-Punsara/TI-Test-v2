@@ -5,15 +5,10 @@
 // herein in any form is strictly forbidden, unless permitted by WSO2 expressly.
 // You may not alter or remove any copyright or other notice from copies of this content.
 
-# capturing following attributes from a single feed.
-# 
-# + link - link to the specific feed.
-# + description - description of feed.
-# + title - title of feed.
-# + pubDate - published date of feed.
-public type ItemDetails record {
-    json  link;
-    json  description;
-    json  title;
-    json  pubDate;
-};
+const string LAST_EXECUTION_TIME_AND_STATUS_CELLS = "A3:B3";
+const string NEXT_EXECUTION_TIME_CELL = "C3";
+const string STATUS_RANGE = "A3:C3";
+const string STATUS_CELL = "B3";
+const string RUNNING_STATE = "Running";
+const string EXECUTED_STATE = "Executed";
+const string SHEET_METADATA_CELLS = "B1:B4";
